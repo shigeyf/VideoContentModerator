@@ -78,11 +78,13 @@ namespace Microsoft.ContentModerator.VideoContentModerator
             var compressedVideoPath = GenerateProxyVideo(videoPath);
 
             // Visual moderation with the proxy video file
-            var result = await ProcessVideoModeration(compressedVideoPath);
+            var vmResult = await ProcessVideoModeration(compressedVideoPath);
 
             // Text moderation with VTT file
+            var tmResult = await ProcessTextModeration(vmResult.StreamingUrlDetails.VttUrl);
+
             // Create a Review Item & Upload moderation results
-            await UploadVideoReview(result);
+            await UploadVideoReview(vmResult, tmResult);
 
             watch.Stop();
             Console.WriteLine("Video review successfully completed...");
@@ -116,10 +118,10 @@ namespace Microsoft.ContentModerator.VideoContentModerator
             return compressedVideoPath;
         }
 
-        private static async Task<VisualModerationAsset> ProcessVideoModeration(string compressedVideoPath)
+        private static async Task<VisualModerationResult> ProcessVideoModeration(string compressedVideoPath)
         {
             Console.WriteLine("[Content Moderator] Video moderation process started...");
-            VisualModerationAsset result = await visualModerator.ModerateVideo(compressedVideoPath);
+            VisualModerationResult result = await visualModerator.ModerateVideo(compressedVideoPath);
             if (result == null)
             {
                 Console.ForegroundColor = ConsoleColor.Red;
@@ -131,22 +133,46 @@ namespace Microsoft.ContentModerator.VideoContentModerator
             return result;
         }
 
-        private static async Task<string> UploadVideoReview(VisualModerationAsset result)
+        private static async Task<TextModerationResult> ProcessTextModeration(string webVttUrl)
+        {
+            Console.WriteLine("[Content Moderator] Text moderation process started...");
+            TextModerationResult result = new TextModerationResult();
+            try
+            {
+                string webVttString = await WebVttParser.LoadWebVtt(webVttUrl);
+                result.webVtt = webVttString;
+                List<CaptionTextModerationResult> captionTextResults = WebVttParser.ParseWebVtt(webVttString);
+                result.captionTextResults = await textModerator.TextScreen(captionTextResults);
+            }
+            catch (Exception e)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine("[Content Moderator] Text moderation process failed. Error: ", e.ToString());
+                Console.ForegroundColor = ConsoleColor.White;
+            }
+
+            Console.WriteLine("[Content Moderator] Text moderation process completed...");
+            return result;
+        }
+
+        private static async Task<string> UploadVideoReview(VisualModerationResult vmResult, TextModerationResult tmResult)
         {
             Console.WriteLine("[Content Moderator] Video Review publishing started...");
             string reviewId = string.Empty;
-            string videoFilePath = result.VideoFilePath;
+            string videoFilePath = vmResult.VideoFilePath;
 
             try
             {
-                reviewId = await videoReviewUploader.CreateVideoReview(result);
-                await videoReviewUploader.AddVideoFramesToVideoReview(result, reviewId);
+                reviewId = await videoReviewUploader.CreateVideoReview(vmResult, tmResult);
+                await videoReviewUploader.AddVideoFramesToVideoReview(vmResult, reviewId);
+                await videoReviewUploader.AddVideoTranscriptToVideoReview(tmResult, reviewId);
+                await videoReviewUploader.AddVideoTranscriptModerationResultToVideoReview(tmResult, reviewId);
                 await videoReviewUploader.PublishVideoReview(reviewId);
             }
             catch(Exception e)
             {
                 Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine("[Content Moderator] Error: ", e.ToString());
+                Console.WriteLine("[Content Moderator] Video Review publishing failed. Error: ", e.ToString());
                 Console.ForegroundColor = ConsoleColor.White;
             }
 

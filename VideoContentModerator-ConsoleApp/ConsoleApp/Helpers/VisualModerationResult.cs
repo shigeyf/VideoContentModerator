@@ -7,13 +7,13 @@
 
 namespace Microsoft.ContentModerator.VideoContentModerator
 {
-    public class VisualModerationAsset
+    public class VisualModerationResult
     {
+        public string VisualModeratedJson { get; set; }
+        public string VideoName { get; set; }
+        public string VideoFilePath { get; set; }
         public PublishedUrlDetails StreamingUrlDetails { get; set; }
         public string AccessToken { get; set; }
-        public string VideoName { get; set; }
-        public string VisualModeratedJson { get; set; }
-        public string VideoFilePath { get; set; }
     }
 
     public class PublishedUrlDetails

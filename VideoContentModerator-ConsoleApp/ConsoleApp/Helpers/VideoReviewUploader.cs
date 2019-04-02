@@ -39,22 +39,23 @@ namespace Microsoft.ContentModerator.VideoContentModerator
             };
         }
 
-        public async Task<string> CreateVideoReview(VisualModerationAsset result)
+        public async Task<string> CreateVideoReview(VisualModerationResult vmResult, TextModerationResult tmResult)
         {
             // Step 1 - Create Video Review
 
             string reviewId = string.Empty;
-            List<FrameEvent> frameEventList = ExtractFrameEventListFromJson(result.VisualModeratedJson);
+            List<FrameEvent> frameEventList = ExtractFrameEventListFromJson(vmResult.VisualModeratedJson);
+            frameEventList = MergeTextModerationResultToFrameEventList(frameEventList, tmResult.captionTextResults);
 
-            reviewId = await CreateVideoReviewWithContentModeratorReviewAPI(result, frameEventList);
+            reviewId = await CreateVideoReviewWithContentModeratorReviewAPI(vmResult, frameEventList);
             this.frameEventList = FixFrameNameInFrameEventList(frameEventList, reviewId);
 
             return reviewId;
         }
 
-        public async Task<string> AddVideoFramesToVideoReview(VisualModerationAsset result, string reviewId)
+        public async Task<string> AddVideoFramesToVideoReview(VisualModerationResult result, string reviewId)
         {
-            // Step 2 - Add Video Frames to Video Review
+            // Step 2 (a) - Add Video Frames to Video Review
 
             bool isSuccess = true;
 
@@ -64,6 +65,36 @@ namespace Microsoft.ContentModerator.VideoContentModerator
             if (!isSuccess)
             {
                 throw new Exception("AddVideoFramesToReviewWithContentModeratorReviewAPI call failed.");
+            }
+
+            return reviewId;
+        }
+
+        public async Task<string> AddVideoTranscriptToVideoReview(TextModerationResult result, string reviewId)
+        {
+            // Step 2 (b) - Add video transcript to Video Review
+
+            bool isSuccess = true;
+
+            isSuccess = await AddVideoTranscriptToReviewWithContentModeratorReviewAPI(reviewId, result.webVtt);
+            if (!isSuccess)
+            {
+                throw new Exception("AddVideoTranscriptToReviewWithContentModeratorReviewAPI call failed.");
+            }
+
+            return reviewId;
+        }
+
+        public async Task<string> AddVideoTranscriptModerationResultToVideoReview(TextModerationResult result, string reviewId)
+        {
+            // Step 2 (c) - Add video transcript moderation result to Video Review
+
+            bool isSuccess = true;
+
+            isSuccess = await AddVideoTranscriptModerationResultToReviewWithContentModeratorReviewAPI(reviewId, result.captionTextResults);
+            if (!isSuccess)
+            {
+                throw new Exception("AddVideoTranscriptModerationResultToReviewWithContentModeratorReviewAPI call failed.");
             }
 
             return reviewId;
@@ -85,12 +116,12 @@ namespace Microsoft.ContentModerator.VideoContentModerator
 
         #region ### Create Video Review operations
 
-        public async Task<string> CreateVideoReviewWithContentModeratorReviewAPI(VisualModerationAsset result, List<FrameEvent> frameEventList)
+        public async Task<string> CreateVideoReviewWithContentModeratorReviewAPI(VisualModerationResult vmResult, List<FrameEvent> frameEventList)
         {
             string reviewId = string.Empty;
             try
             {
-                string videoReviewsJson = CreateVideoReviewObject(result, frameEventList);
+                string videoReviewsJson = CreateVideoReviewObject(vmResult, frameEventList);
                 if (string.IsNullOrWhiteSpace(videoReviewsJson))
                 {
                     throw new Exception("VideoReview process failed in CreateVideoReview");
@@ -113,20 +144,20 @@ namespace Microsoft.ContentModerator.VideoContentModerator
             return reviewId;
         }
 
-        private string CreateVideoReviewObject(VisualModerationAsset result, List<FrameEvent> frameEventList)
+        private string CreateVideoReviewObject(VisualModerationResult vmResult, List<FrameEvent> frameEventList)
         {
-            List<VideoReview> videoReviews = GenerateVideoReviewList(result, frameEventList);
+            List<VideoReview> videoReviews = GenerateVideoReviewList(vmResult, frameEventList);
             return JsonConvert.SerializeObject(videoReviews);
         }
 
-        private List<VideoReview> GenerateVideoReviewList(VisualModerationAsset result, List<FrameEvent> frameEventList)
+        private List<VideoReview> GenerateVideoReviewList(VisualModerationResult vmResult, List<FrameEvent> frameEventList)
         {
             List<VideoReview> videoReviewList = new List<VideoReview>();
             VideoReview videoReviewObj = new VideoReview();
 
             videoReviewObj.Type = VideoEntityType;
-            videoReviewObj.Content = result.StreamingUrlDetails.SmoothUri;
-            videoReviewObj.ContentId = result.VideoName;
+            videoReviewObj.Content = vmResult.StreamingUrlDetails.SmoothUri;
+            videoReviewObj.ContentId = vmResult.VideoName;
             videoReviewObj.CallbackEndpoint = null;
             videoReviewObj.Metadata = frameEventList.Count != 0 ? GenerateVideoReviewMetadata(frameEventList) : null; ;
             videoReviewObj.Status = UnpublishedStatus;
@@ -139,18 +170,33 @@ namespace Microsoft.ContentModerator.VideoContentModerator
         private List<Metadata> GenerateVideoReviewMetadata(List<FrameEvent> frameEventList)
         {
             List<Metadata> metadata = new List<Metadata>();
+
             var adultScore = frameEventList.OrderByDescending(a => Double.Parse(a.AdultScore)).FirstOrDefault().AdultScore;
-            var racyScore = frameEventList.OrderByDescending(a => Double.Parse(a.RacyScore)).FirstOrDefault().RacyScore;
             var isAdult = double.Parse(adultScore) > reviewToolConfig.AdultFrameThreshold ? true : false;
+            var racyScore = frameEventList.OrderByDescending(a => Double.Parse(a.RacyScore)).FirstOrDefault().RacyScore;
             var isRacy = double.Parse(racyScore) > reviewToolConfig.RacyFrameThreshold ? true : false;
+
+            var adultTextScore = frameEventList.OrderByDescending(a => Double.Parse(a.AdultTextScore)).FirstOrDefault().AdultTextScore;
+            var isAdultText = double.Parse(adultTextScore) > reviewToolConfig.Category1TextThreshold ? true : false;
+            var racyTextScore = frameEventList.OrderByDescending(a => Double.Parse(a.RacyTextScore)).FirstOrDefault().RacyTextScore;
+            var isRacyText = double.Parse(racyTextScore) > reviewToolConfig.Category2TextThreshold ? true : false;
+            var offensiveTextScore = frameEventList.OrderByDescending(a => Double.Parse(a.OffensiveTextScore)).FirstOrDefault().OffensiveTextScore;
+            var isOffensiveText = double.Parse(offensiveTextScore) > reviewToolConfig.Category3TextThreshold ? true : false;
+
             var reviewRecommended = frameEventList.Any(frame => frame.ReviewRecommended);
             metadata = new List<Metadata>()
             {
-                new Metadata() {Key = "ReviewRecommended", Value = reviewRecommended.ToString()},
-                new Metadata() {Key = "AdultScore", Value = adultScore},
-                new Metadata() {Key = "a", Value = isAdult.ToString() },
-                new Metadata() {Key = "RacyScore", Value = racyScore},
-                new Metadata() {Key = "r", Value = isRacy.ToString() }
+                new Metadata() { Key = "ReviewRecommended", Value = reviewRecommended.ToString() },
+                new Metadata() { Key = "AdultScore", Value = adultScore },
+                new Metadata() { Key = "a", Value = isAdult.ToString() },
+                new Metadata() { Key = "RacyScore", Value = racyScore },
+                new Metadata() { Key = "r", Value = isRacy.ToString() },
+                new Metadata() { Key = "Category1TextScore", Value = adultTextScore },
+                new Metadata() { Key = "at", Value = isAdultText.ToString() },
+                new Metadata() { Key = "Category2TextScore", Value = racyTextScore },
+                new Metadata() { Key = "rt", Value = isRacyText.ToString() },
+                new Metadata() { Key = "Category3TextScore", Value = offensiveTextScore },
+                new Metadata() { Key = "ot", Value = isOffensiveText.ToString() }
             };
             return metadata;
         }
@@ -213,12 +259,95 @@ namespace Microsoft.ContentModerator.VideoContentModerator
                         new Metadata() {Key = "Racy Score", Value = frameEvent.RacyScore},
                         new Metadata() {Key = "r", Value = frameEvent.IsRacyContent.ToString()},
                         new Metadata() {Key = "ExternalId", Value = frameEvent.FrameName},
+                        new Metadata() {Key = "at", Value = frameEvent.IsAdultTextContent.ToString() },
+                        new Metadata() {Key = "rt", Value = frameEvent.IsRacyTextContent.ToString() },
+                        new Metadata() {Key = "ot", Value = frameEvent.IsOffensiveTextContent.ToString() }
+
                     },
                     ReviewerResultTags = new List<ReviewResultTag>(),
                 };
                 videoFrames.Add(videoFrameObj);
             }
             return videoFrames;
+        }
+
+        #endregion
+
+
+        #region ### Add Video Transcript operations
+
+        public async Task<bool> AddVideoTranscriptToReviewWithContentModeratorReviewAPI(string reviewId, string webVtt)
+        {
+            bool isSuccess = false;
+            try
+            {
+                byte[] webVttBytes = Encoding.UTF8.GetBytes(webVtt);
+                var response = await this.client.Reviews.AddVideoTranscriptWithHttpMessagesAsync(this.reviewToolConfig.TeamId, reviewId, new MemoryStream(webVttBytes));
+                isSuccess = response.Response.IsSuccessStatusCode;
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+                throw;
+            }
+            return isSuccess;
+        }
+
+        #endregion
+
+
+        #region ### Add Video Transcript Moderation Result operations
+
+        public async Task<bool> AddVideoTranscriptModerationResultToReviewWithContentModeratorReviewAPI(string reviewId, List<CaptionTextModerationResult> captionTextModerationResultList)
+        {
+            bool isSuccess = false;
+            try
+            {
+                string trascriptModerationResultListJson = CreateVideoTranscriptModerationResultObject(captionTextModerationResultList);
+                List<TranscriptModerationBodyItem> trascriptModerationResultList = JsonConvert.DeserializeObject<List<TranscriptModerationBodyItem>>(trascriptModerationResultListJson);
+                var response = await this.client.Reviews.AddVideoTranscriptModerationResultWithHttpMessagesAsync("application/json", reviewToolConfig.TeamId, reviewId, trascriptModerationResultList);
+                isSuccess = response.Response.IsSuccessStatusCode;
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+                throw;
+            }
+            return isSuccess;
+        }
+
+        private string CreateVideoTranscriptModerationResultObject(List<CaptionTextModerationResult> captionTextModerationResultList)
+        {
+            List<VideoTranscriptModerationResult> videoTranscriptionModerationResult = GeneratevideoTranscriptionModerationResult(captionTextModerationResultList);
+            return JsonConvert.SerializeObject(videoTranscriptionModerationResult);
+        }
+
+        private List<VideoTranscriptModerationResult> GeneratevideoTranscriptionModerationResult(List<CaptionTextModerationResult> captionTextModerationResultList)
+        {
+            List<VideoTranscriptModerationResult> videoTrascriptModerationResultList = new List<VideoTranscriptModerationResult>();
+
+            foreach (CaptionTextModerationResult captionTextModerationResult in captionTextModerationResultList)
+            {
+                if (captionTextModerationResult.ScreenResult.Terms != null)
+                {
+                    VideoTranscriptModerationResult videoTrascriptModerationResult = new VideoTranscriptModerationResult();
+                    List<ModeratedTerm> terms = new List<ModeratedTerm>();
+                    foreach (var term in captionTextModerationResult.ScreenResult.Terms)
+                    {
+                        ModeratedTerm termObj = new ModeratedTerm
+                        {
+                            Term = term.Term,
+                            Index = term.OriginalIndex.Value
+                        };
+                        terms.Add(termObj);
+                    }
+                    videoTrascriptModerationResult.TimeStamp = "";
+                    videoTrascriptModerationResult.Terms = terms;
+                    videoTrascriptModerationResultList.Add(videoTrascriptModerationResult);
+                }
+            }
+
+            return videoTrascriptModerationResultList;
         }
 
         #endregion
@@ -275,6 +404,12 @@ namespace Microsoft.ContentModerator.VideoContentModerator
                                 };
                                 frameCount++;
                                 eventObj.FrameName = "_" + frameCount + ".jpg";
+                                eventObj.IsAdultTextContent = false;
+                                eventObj.IsRacyTextContent = false;
+                                eventObj.IsOffensiveTextContent = false;
+                                eventObj.AdultTextScore = "0";
+                                eventObj.RacyTextScore = "0";
+                                eventObj.OffensiveTextScore = "0";
                                 outputFrameEventsList.Add(eventObj);
                             }
                         }
@@ -282,6 +417,34 @@ namespace Microsoft.ContentModerator.VideoContentModerator
                 }
             }
             return outputFrameEventsList;
+        }
+
+        private List<FrameEvent> MergeTextModerationResultToFrameEventList(List<FrameEvent> frameEventList, List<CaptionTextModerationResult> captionTextResultList)
+        {
+            foreach (var captionTextResult in captionTextResultList)
+            {
+                foreach (var frame in frameEventList.Where(f => f.TimeStamp >= captionTextResult.StartTime && f.TimeStamp <= captionTextResult.EndTime))
+                {
+                    bool captionAdultTextTag = false;
+                    bool captionRacyTextTag = false;
+                    bool captionOffensiveTextTag = false;
+
+                    double captionAdultTextScore = captionTextResult.ScreenResult.Classification.Category1.Score.Value;
+                    double captionRacyTextScore = captionTextResult.ScreenResult.Classification.Category2.Score.Value;
+                    double captionOffensiveTextScore = captionTextResult.ScreenResult.Classification.Category3.Score.Value;
+                    if (captionTextResult.ScreenResult.Classification.Category1.Score.Value > reviewToolConfig.Category1TextThreshold) captionAdultTextTag = true;
+                    if (captionTextResult.ScreenResult.Classification.Category2.Score.Value > reviewToolConfig.Category2TextThreshold) captionRacyTextTag = true;
+                    if (captionTextResult.ScreenResult.Classification.Category3.Score.Value > reviewToolConfig.Category3TextThreshold) captionOffensiveTextTag = true;
+
+                    frame.IsAdultTextContent = captionAdultTextTag ? captionAdultTextTag : frame.IsAdultTextContent;
+                    frame.IsRacyTextContent = captionRacyTextTag ? captionRacyTextTag : frame.IsRacyTextContent;
+                    frame.IsOffensiveTextContent = captionOffensiveTextTag ? captionOffensiveTextTag : frame.IsOffensiveTextContent;
+                    frame.AdultTextScore = (captionAdultTextScore > Double.Parse(frame.AdultTextScore)) ? captionAdultTextScore.ToString() : frame.AdultTextScore;
+                    frame.RacyTextScore = (captionRacyTextScore > Double.Parse(frame.RacyTextScore)) ? captionRacyTextScore.ToString() : frame.RacyTextScore;
+                    frame.OffensiveTextScore = (captionOffensiveTextScore > Double.Parse(frame.OffensiveTextScore)) ? captionOffensiveTextScore.ToString() : frame.OffensiveTextScore;
+                }
+            }
+            return frameEventList;
         }
 
         private List<FrameEvent> FixFrameNameInFrameEventList(List<FrameEvent> frameEventList, string reviewId)

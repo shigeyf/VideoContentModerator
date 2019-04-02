@@ -24,16 +24,14 @@ namespace Microsoft.ContentModerator.VideoContentModerator
         //AmsConfigurations _configObj = null;
         public FFmpegComponent()
         {
-            if (!Directory.Exists(_WorkOutputDir))
-            {
-                Directory.CreateDirectory(_WorkOutputDir);
-            }
         }
 
         public static string CompressVideo(string videoPath)
         {
             Console.WriteLine("Video Compression File: " + videoPath);
             Console.WriteLine("Video Compression with ffmpeg in-progress...");
+
+            Initialize();
 
             string ffmpegBlobUrl;
             if (File.Exists(_FFmpegExecutablePath))
@@ -64,6 +62,8 @@ namespace Microsoft.ContentModerator.VideoContentModerator
         {
             string frameStorageLocalPath = _WorkOutputDir + id;
             string frameZipFilesPath = frameStorageLocalPath + "_zip";
+
+            Initialize();
 
             Directory.CreateDirectory(frameStorageLocalPath);
             for (int i = 0; i < segments; i++)
@@ -123,6 +123,8 @@ namespace Microsoft.ContentModerator.VideoContentModerator
             Guid guid = Guid.NewGuid();
             Console.WriteLine("Video Frames Creation with ffmpeg ({0}) in-progress...", guid.ToString());
 
+            Initialize();
+
             string ffmpegBlobUrl = string.Empty;
             if (File.Exists(_FFmpegExecutablePath))
             {
@@ -143,6 +145,14 @@ namespace Microsoft.ContentModerator.VideoContentModerator
             process.Close();
 
             Console.WriteLine("Video Frames Creation with ffmpeg({0}) done.", guid.ToString());
+        }
+
+        public static void Initialize()
+        {
+            if (!Directory.Exists(_WorkOutputDir))
+            {
+                Directory.CreateDirectory(_WorkOutputDir);
+            }
         }
 
         public static void CleanUp(string videoFilePath, string reviewId)

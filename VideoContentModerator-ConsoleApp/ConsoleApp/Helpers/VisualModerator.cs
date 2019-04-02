@@ -27,13 +27,13 @@ namespace Microsoft.ContentModerator.VideoContentModerator
             this.visualModeratorConfig = config.visualModerator;
         }
 
-        public async Task<VisualModerationAsset> ModerateVideo(string videoPath)
+        public async Task<VisualModerationResult> ModerateVideo(string videoPath)
         {
             string resourceGroup = this.visualModeratorConfig.ResourceGroup;
             string accountName = this.visualModeratorConfig.AccountName;
 
             IAzureMediaServicesClient client = await CreateMediaServicesClientAsync();
-            VisualModerationAsset result = null;
+            VisualModerationResult result = null;
 
             try
             {
@@ -219,9 +219,9 @@ namespace Microsoft.ContentModerator.VideoContentModerator
             client.StreamingLocators.Create(resourceGroup, accountName, streamingLocatorName, locator);
         }
 
-        private VisualModerationAsset CreateVisualModeratorResult(IAzureMediaServicesClient client, string resourceGroup, string accountName, string videoStreamingLocatorName, string analysisStreamingLocatorName)
+        private VisualModerationResult CreateVisualModeratorResult(IAzureMediaServicesClient client, string resourceGroup, string accountName, string videoStreamingLocatorName, string analysisStreamingLocatorName)
         {
-            VisualModerationAsset result = new VisualModerationAsset();
+            VisualModerationResult result = new VisualModerationResult();
             result.StreamingUrlDetails = new PublishedUrlDetails();
 
             var streamingEndpoint = client.StreamingEndpoints.Get(resourceGroup, accountName, "default");

@@ -64,6 +64,9 @@ namespace Microsoft.ContentModerator.VideoContentModerator
 
         public string ApiEndpoint        { get { return this._config[prop("ContentModeratorModerateApiEndpoint")]; } }
         public string ApiSubscriptionKey { get { return this._config[prop("ContentModeratorModerateApiSubscriptionKey")]; } }
+        public double Category1TextThreshold { get { return Convert.ToDouble(this._config[prop("Category1TextThreshold")]); } }
+        public double Category2TextThreshold { get { return Convert.ToDouble(this._config[prop("Category2TextThreshold")]); } }
+        public double Category3TextThreshold { get { return Convert.ToDouble(this._config[prop("Category3TextThreshold")]); } }
     }
 
     public class ReviewToolConfig

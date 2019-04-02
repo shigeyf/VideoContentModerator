@@ -55,12 +55,31 @@ namespace Microsoft.ContentModerator.VideoContentModerator
         public string Value { get; set; }
     }
 
+    [DataContract]
     public class ReviewResultTag
     {
         [DataMember]
         public string Key { get; set; }
         [DataMember]
         public string Value { get; set; }
+    }
+
+    [DataContract]
+    public class VideoTranscriptModerationResult
+    {
+        [DataMember]
+        public string TimeStamp { get; set; }
+        [DataMember]
+        public List<ModeratedTerm> Terms { get; set; }
+    }
+
+    [DataContract]
+    public class ModeratedTerm
+    {
+        [DataMember]
+        public int Index { get; set; }
+        [DataMember]
+        public string Term { get; set; }
     }
 }
 

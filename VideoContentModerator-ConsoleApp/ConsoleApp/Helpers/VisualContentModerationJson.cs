@@ -27,16 +27,23 @@ namespace Microsoft.ContentModerator.VideoContentModerator
     public class FrameEvent
     {
         public bool ReviewRecommended { get; set; }
-        public string Interval { get; set; }
+        //public string Interval { get; set; }
         public string AdultScore { get; set; }
         public string RacyScore { get; set; }
         public int Index { get; set; }
         public long TimeStamp { get; set; }
         public long ShotIndex { get; set; }
+
+        // Extended properties
         public string FrameName { get; set; }
-        public string FrameOrderId { get; set; }
         public int TimeScale { get; set; }
         public bool IsAdultContent { get; set; }
         public bool IsRacyContent { get; set; }
+        public bool IsAdultTextContent { get; set; }
+        public bool IsRacyTextContent { get; set; }
+        public bool IsOffensiveTextContent { get; set; }
+        public string AdultTextScore { get; set; }
+        public string RacyTextScore { get; set; }
+        public string OffensiveTextScore { get; set; }
     }
 }
