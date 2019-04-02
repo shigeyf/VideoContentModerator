@@ -436,6 +436,11 @@ namespace Microsoft.ContentModerator.VideoContentModerator
                     if (captionTextResult.ScreenResult.Classification.Category2.Score.Value > reviewToolConfig.Category2TextThreshold) captionRacyTextTag = true;
                     if (captionTextResult.ScreenResult.Classification.Category3.Score.Value > reviewToolConfig.Category3TextThreshold) captionOffensiveTextTag = true;
 
+                    if (captionTextResult.ScreenResult.Classification.ReviewRecommended != null)
+                    {
+                        bool reviewRecommended = captionTextResult.ScreenResult.Classification.ReviewRecommended.HasValue && captionTextResult.ScreenResult.Classification.ReviewRecommended.Value;
+                        frame.ReviewRecommended = reviewRecommended ? reviewRecommended : frame.ReviewRecommended;
+                    }
                     frame.IsAdultTextContent = captionAdultTextTag ? captionAdultTextTag : frame.IsAdultTextContent;
                     frame.IsRacyTextContent = captionRacyTextTag ? captionRacyTextTag : frame.IsRacyTextContent;
                     frame.IsOffensiveTextContent = captionOffensiveTextTag ? captionOffensiveTextTag : frame.IsOffensiveTextContent;
