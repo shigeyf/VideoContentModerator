@@ -5,7 +5,6 @@
  */
 
 using Microsoft.Azure.CognitiveServices.ContentModerator;
-using Microsoft.Azure.CognitiveServices.ContentModerator.Models;
 using System;
 using System.Collections.Generic;
 using System.IO;
