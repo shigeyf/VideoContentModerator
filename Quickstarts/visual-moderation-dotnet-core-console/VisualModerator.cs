@@ -168,7 +168,7 @@ namespace Microsoft.ContentModerator.VideoContentModerator
             }
             else
             {
-                Console.WriteLine("Using genreated AMSv3 Transform: {0}", transformName);
+                Console.WriteLine("Using generated AMSv3 Transform: {0}", transformName);
             }
             return transform;
         }
